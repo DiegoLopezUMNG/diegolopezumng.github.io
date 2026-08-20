@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capa uniforme de material volátil — Simulación</title>
+
+<!-- Tipografías: Fraunces (display, con carácter de cuaderno de laboratorio),
+     Inter (texto general) e IBM Plex Mono (números y ecuaciones) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* ---------- Paleta (tokens) ----------
+     Fondo casi negro-verdoso, como una mesa de laboratorio de noche.
+     Acento ámbar = vapor / evaporación. Acento cian = líquido / capa. */
+  :root{
+    --bg:#0f1b1e;
+    --panel:#152427;
+    --panel-2:#1b2c30;
+    --line:#2a3d41;
+    --text:#edeae0;
+    --muted:#8fa3a6;
+    --vapor:#e8a33d;
+    --liquid:#4fb6c7;
+    --ok:#7fc98f;
+    --warn:#e88a5c;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 700px at 20% -10%, #16292c 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding:28px 18px 60px;
+  }
+
+  .wrap{max-width:980px;margin:0 auto;}
+
+  header{margin-bottom:22px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--vapor);
+    font-size:12px;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:clamp(24px,4vw,34px);
+    margin:6px 0 8px;
+    line-height:1.15;
+  }
+  .sub{color:var(--muted);font-size:14.5px;max-width:62ch;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    gap:18px;
+    margin-top:22px;
+  }
+  @media (max-width:760px){
+    .grid{grid-template-columns:1fr;}
+  }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px;
+  }
+
+  /* ---------- Recipiente / beaker ---------- */
+  .beaker-card{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .beaker{
+    position:relative;
+    width:120px;height:210px;
+    border:3px solid #3c565b;
+    border-top:none;
+    border-radius:0 0 10px 10px;
+    background:var(--panel-2);
+    overflow:hidden;
+  }
+  .liquid{
+    position:absolute;bottom:0;left:0;right:0;
+    background:linear-gradient(180deg,#63cddd,var(--liquid));
+    transition:height .15s linear;
+  }
+  .particle{
+    position:absolute;
+    width:4px;height:4px;
+    border-radius:50%;
+    background:var(--vapor);
+    opacity:.85;
+    animation:rise 2.6s ease-in forwards;
+  }
+  @keyframes rise{
+    0%{transform:translateY(0);opacity:.9;}
+    70%{opacity:.7;}
+    100%{transform:translateY(-160px);opacity:0;}
+  }
+  .beaker-label{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);text-align:center;}
+  .beaker-label b{color:var(--text);}
+
+  /* ---------- Controles ---------- */
+  .control{margin-bottom:16px;}
+  .control label{
+    display:flex;justify-content:space-between;
+    font-size:13px;color:var(--muted);margin-bottom:6px;
+  }
+  .control label span.val{
+    font-family:'IBM Plex Mono',monospace;color:var(--text);
+  }
+  input[type=range]{
+    width:100%;accent-color:var(--vapor);
+  }
+
+  .btnrow{display:flex;gap:8px;margin-top:6px;}
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    background:var(--vapor);
+    color:#1a1206;
+    border:none;
+    border-radius:8px;
+    padding:9px 14px;
+    cursor:pointer;
+  }
+  button.secondary{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+  }
+  button:active{transform:translateY(1px);}
+
+  /* ---------- Panel derecho: gráfica + lecturas ---------- */
+  .right-col{display:flex;flex-direction:column;gap:18px;}
+  canvas{width:100%;height:320px;display:block;}
+
+  .readouts{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+  }
+  @media (max-width:520px){.readouts{grid-template-columns:1fr 1fr;}}
+  .stat{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+  .stat .v{font-family:'IBM Plex Mono',monospace;font-size:16px;margin-top:3px;}
+
+  .case-badge{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    padding:10px 14px;
+    border-radius:10px;
+    border:1px solid var(--line);
+  }
+  .case-ok{border-color:var(--ok);color:var(--ok);}
+  .case-warn{border-color:var(--warn);color:var(--warn);}
+
+  .eq{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+    color:var(--text);
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  .eq .fx{color:var(--vapor);}
+
+  footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Ecuaciones diferenciales</div>
+    <h1>Capa uniforme de material volátil</h1>
+    <p class="sub">Simulación del espesor y(t) de la capa sobre la base del recipiente.
+      Mueve los controles para ver cómo cambian el equilibrio y el tiempo de evaporación total.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ===== Columna izquierda: recipiente + controles ===== -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+      <div class="card beaker-card">
+        <div class="beaker" id="beaker">
+          <div class="liquid" id="liquid"></div>
+        </div>
+        <div class="beaker-label">espesor actual<br><b id="yNowLabel">y = 0.00</b></div>
+        <div class="btnrow">
+          <button id="playBtn">▶ Simular</button>
+          <button class="secondary" id="resetBtn">Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="control">
+          <label>y₀ — espesor inicial <span class="val" id="y0v"></span></label>
+          <input type="range" id="y0" min="0.3" max="5" step="0.1" value="3">
+        </div>
+        <div class="control">
+          <label>k — tasa de evaporación <span class="val" id="kv"></span></label>
+          <input type="range" id="k" min="0.05" max="2" step="0.05" value="0.6">
+        </div>
+        <div class="control">
+          <label>α — tasa de redepósito <span class="val" id="av"></span></label>
+          <input type="range" id="alpha" min="0.05" max="2" step="0.05" value="0.4">
+        </div>
+        <div class="control">
+          <label>ventana de tiempo <span class="val" id="tv"></span></label>
+          <input type="range" id="tWindow" min="2" max="40" step="1" value="12">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== Columna derecha: gráfica + lecturas ===== -->
+    <div class="right-col">
+
+      <div class="card">
+        <canvas id="chart"></canvas>
+      </div>
+
+      <div class="readouts">
+        <div class="stat"><div class="k">y equilibrio</div><div class="v" id="yeqOut">—</div></div>
+        <div class="stat"><div class="k">umbral k/α</div><div class="v" id="threshOut">—</div></div>
+        <div class="stat"><div class="k">t* (se agota)</div><div class="v" id="tstarOut">—</div></div>
+      </div>
+
+      <div class="case-badge" id="caseBadge">—</div>
+
+      <div class="eq"><span class="fx">y(t)</span> = y₀ − (k/α)·(1 − e^(−α·t))</div>
+
+    </div>
+  </div>
+
+  <footer>Modelo: dy/dt = −k + α·(y₀ − y(t)), con y(0) = y₀. Simulación construida para el ejercicio 1 del parcial de corte I.</footer>
+
+</div>
+
+<script>
+/* ======================================================================
+   TODO el código de abajo está comentado con detalle porque este archivo
+   se usa como material de estudio, no solo como una demo visual.
+   ====================================================================== */
+
+// --- 1. Referencias a los elementos del DOM que vamos a leer/escribir ---
+const y0Input = document.getElementById('y0');
+const kInput  = document.getElementById('k');
+const aInput  = document.getElementById('alpha');
+const twInput = document.getElementById('tWindow');
+
+const y0v = document.getElementById('y0v');
+const kv  = document.getElementById('kv');
+const av  = document.getElementById('av');
+const tv  = document.getElementById('tv');
+
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+
+const liquid = document.getElementById('liquid');
+const beaker = document.getElementById('beaker');
+const yNowLabel = document.getElementById('yNowLabel');
+
+const yeqOut = document.getElementById('yeqOut');
+const threshOut = document.getElementById('threshOut');
+const tstarOut = document.getElementById('tstarOut');
+const caseBadge = document.getElementById('caseBadge');
+
+const playBtn = document.getElementById('playBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+// --- 2. Estado de la animación (tiempo simulado actual, si está corriendo) ---
+let simT = 0;          // tiempo "actual" que se muestra en el recipiente
+let playing = false;
+let rafId = null;
+let lastFrame = null;
+let particleTimer = null;
+
+// --- 3. La solución analítica de la EDO ---
+// y(t) = y0 - (k/alpha) * (1 - e^(-alpha*t))
+// Se obtiene resolviendo dy/dt + alpha*y = alpha*y0 - k (lineal, factor integrante e^(alpha t)).
+function y_of_t(t, y0, k, alpha){
+  const raw = y0 - (k/alpha) * (1 - Math.exp(-alpha * t));
+  return Math.max(0, raw); // el espesor físico no puede ser negativo
+}
+
+// --- 4. Lectura de parámetros actuales desde los sliders ---
+function getParams(){
+  const y0 = parseFloat(y0Input.value);
+  const k  = parseFloat(kInput.value);
+  const alpha = parseFloat(aInput.value);
+  const tWindow = parseFloat(twInput.value);
+  return {y0, k, alpha, tWindow};
+}
+
+// --- 5. Clasificación en los tres casos que pide el punto (b) ---
+function classify(y0, k, alpha){
+  const thresh = k / alpha;           // valor crítico y0 = k/alpha
+  const eps = 1e-6;
+  if (y0 < thresh - eps){
+    // Caso 1: se agota en tiempo finito
+    const tstar = (1/alpha) * Math.log( k / (k - alpha*y0) );
+    return {caso:1, thresh, yeq:0, tstar};
+  } else if (Math.abs(y0 - thresh) <= eps){
+    // Caso 2 (límite): se agota solo cuando t -> infinito
+    return {caso:2, thresh, yeq:0, tstar:Infinity};
+  } else {
+    // Caso 3: queda un residuo permanente
+    const yeq = y0 - thresh;
+    return {caso:3, thresh, yeq, tstar:Infinity};
+  }
+}
+
+// --- 6. Dibujar la gráfica en el canvas ---
+function draw(){
+  const {y0, k, alpha, tWindow} = getParams();
+  const info = classify(y0, k, alpha);
+
+  // Ajuste de resolución para pantallas de alta densidad (retina)
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const padL = 46, padR = 14, padT = 16, padB = 30;
+  const plotW = cssW - padL - padR;
+  const plotH = cssH - padT - padB;
+  const yMax = y0 * 1.15;
+
+  function px(t, yy){
+    const x = padL + (t / tWindow) * plotW;
+    const y = padT + plotH - (yy / yMax) * plotH;
+    return [x,y];
+  }
+
+  // --- Gridlines ---
+  ctx.strokeStyle = '#22343798';
+  ctx.lineWidth = 1;
+  ctx.font = '11px IBM Plex Mono, monospace';
+  ctx.fillStyle = '#8fa3a6';
+  for(let i=0;i<=4;i++){
+    const yy = (yMax/4)*i;
+    const [x0,py] = px(0,yy);
+    const [x1] = px(tWindow,yy);
+    ctx.beginPath(); ctx.moveTo(x0,py); ctx.lineTo(x1,py); ctx.stroke();
+    ctx.fillText(yy.toFixed(1), 6, py+4);
+  }
+  for(let i=0;i<=6;i++){
+    const t = (tWindow/6)*i;
+    const [px0,py0] = px(t,0);
+    ctx.fillText(t.toFixed(1), px0-8, cssH-10);
+  }
+
+  // --- Asíntota / equilibrio (línea punteada) ---
+  if (info.caso === 3){
+    ctx.setLineDash([5,4]);
+    ctx.strokeStyle = '#e88a5c';
+    ctx.beginPath();
+    const [xa,ya] = px(0, info.yeq);
+    const [xb] = px(tWindow, info.yeq);
+    ctx.moveTo(xa,ya); ctx.lineTo(xb,ya); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // --- Curva y(t) ---
+  ctx.strokeStyle = '#4fb6c7';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  const N = 240;
+  for(let i=0;i<=N;i++){
+    const t = (tWindow*i)/N;
+    const yy = y_of_t(t, y0, k, alpha);
+    const [x,py] = px(t,yy);
+    if(i===0) ctx.moveTo(x,py); else ctx.lineTo(x,py);
+  }
+  ctx.stroke();
+
+  // --- Marca t* si es finito y visible en la ventana ---
+  if (isFinite(info.tstar) && info.tstar <= tWindow){
+    const [x,py] = px(info.tstar, 0);
+    ctx.fillStyle = '#e8a33d';
+    ctx.beginPath(); ctx.arc(x,py,4,0,Math.PI*2); ctx.fill();
+  }
+
+  // --- Punto móvil (tiempo simulado actual) ---
+  const yNow = y_of_t(simT, y0, k, alpha);
+  const [xn,yn] = px(Math.min(simT,tWindow), yNow);
+  ctx.fillStyle = '#e8a33d';
+  ctx.beginPath(); ctx.arc(xn,yn,5,0,Math.PI*2); ctx.fill();
+
+  updateReadouts(info, y0, k, alpha);
+  updateBeaker(yNow, y0);
+}
+
+// --- 7. Actualizar las tarjetas de lectura numérica y la etiqueta de caso ---
+function updateReadouts(info, y0, k, alpha){
+  yeqOut.textContent   = info.caso===3 ? info.yeq.toFixed(2) : '0.00';
+  threshOut.textContent = (k/alpha).toFixed(2);
+  tstarOut.textContent = isFinite(info.tstar) ? info.tstar.toFixed(2) : '∞';
+
+  if (info.caso === 1){
+    caseBadge.className = 'case-badge case-ok';
+    caseBadge.textContent = 'Caso 1 · y₀ < k/α → el material se evapora por completo en t* = ' + info.tstar.toFixed(2);
+  } else if (info.caso === 2){
+    caseBadge.className = 'case-badge case-ok';
+    caseBadge.textContent = 'Caso límite · y₀ = k/α → se evapora solo de forma asintótica (t → ∞)';
+  } else {
+    caseBadge.className = 'case-badge case-warn';
+    caseBadge.textContent = 'Caso 3 · y₀ > k/α → NUNCA se evapora del todo, queda un residuo y_eq = ' + info.yeq.toFixed(2);
+  }
+}
+
+// --- 8. Recipiente animado: altura del líquido proporcional a y(t)/y0_max ---
+function updateBeaker(yNow, y0){
+  const scaleMax = 5; // mismo tope que el slider de y0, para que la escala visual sea estable
+  const pct = Math.max(0, Math.min(1, yNow/scaleMax));
+  liquid.style.height = (pct*100) + '%';
+  yNowLabel.textContent = 'y = ' + yNow.toFixed(2);
+}
+
+// --- 9. Partículas de "vapor" subiendo desde el líquido (puramente decorativo) ---
+function spawnParticle(){
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.left = (10 + Math.random()*100) + 'px';
+  p.style.bottom = (parseFloat(liquid.style.height||'0')) + '%';
+  beaker.appendChild(p);
+  setTimeout(()=>p.remove(), 2600);
+}
+
+// --- 10. Bucle de animación (Play) ---
+function step(ts){
+  if(!lastFrame) lastFrame = ts;
+  const dt = (ts - lastFrame)/1000;
+  lastFrame = ts;
+
+  const {tWindow} = getParams();
+  const speed = tWindow/6; // recorre toda la ventana en ~6 segundos reales
+  simT += dt*speed;
+
+  if (simT >= tWindow){
+    simT = tWindow;
+    draw();
+    stopPlaying();
+    return;
+  }
+  draw();
+  rafId = requestAnimationFrame(step);
+}
+
+function startPlaying(){
+  playing = true;
+  lastFrame = null;
+  playBtn.textContent = '⏸ Pausar';
+  particleTimer = setInterval(spawnParticle, 350);
+  rafId = requestAnimationFrame(step);
+}
+function stopPlaying(){
+  playing = false;
+  playBtn.textContent = '▶ Simular';
+  clearInterval(particleTimer);
+  if(rafId) cancelAnimationFrame(rafId);
+}
+
+// --- 11. Eventos de UI ---
+playBtn.addEventListener('click', ()=>{
+  if(playing) stopPlaying(); else startPlaying();
+});
+resetBtn.addEventListener('click', ()=>{
+  stopPlaying();
+  simT = 0;
+  draw();
+});
+
+[y0Input,kInput,aInput,twInput].forEach(inp=>{
+  inp.addEventListener('input', ()=>{
+    y0v.textContent = parseFloat(y0Input.value).toFixed(1);
+    kv.textContent  = parseFloat(kInput.value).toFixed(2);
+    av.textContent  = parseFloat(aInput.value).toFixed(2);
+    tv.textContent  = parseFloat(twInput.value).toFixed(0);
+    draw();
+  });
+});
+
+// --- 12. Inicialización ---
+y0v.textContent = parseFloat(y0Input.value).toFixed(1);
+kv.textContent  = parseFloat(kInput.value).toFixed(2);
+av.textContent  = parseFloat(aInput.value).toFixed(2);
+tv.textContent  = parseFloat(twInput.value).toFixed(0);
+window.addEventListener('resize', draw);
+draw();
+</script>
+</body>
+</html>
